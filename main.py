@@ -1,9 +1,19 @@
+import httpx
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class Token(BaseModel):
@@ -15,46 +25,39 @@ async def root():
     return {"message": "Hello there!"}
 
 
-@app.get("/oauth", response_class=HTMLResponse)
+@app.get("/oauth/callback", response_class=HTMLResponse)
 async def oauth():
-    # HTML with JavaScript to catch token from the fragment
     return """
     <!DOCTYPE html>
     <html>
-    <head><title>OAuth Callback</title></head>
+    <head><meta charset="UTF-8"><title>OAuth Redirect</title></head>
     <body>
-        <h2>Processing OAuth Token...</h2>
-        <script>
-            window.onload = function() {
-                const hash = window.location.hash.substring(1); // remove leading #
-                const params = new URLSearchParams(hash);
-                const accessToken = params.get("access_token");
-
-                if (accessToken) {
-                    // Send token to backend
-                    fetch("/save_token", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ token: accessToken })
-                    });
-                }
-                window.open('','_self').close();
-            }
-        </script>
+    <script>
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const token = params.get("access_token");
+    
+      if (token) {
+        // Send token back to parent window
+        console.log("Token received:", token);
+        window.opener.postMessage({ token }, "*");
+      } else {
+        console.log("No token found");
+        window.opener.postMessage({ error: "No token found" }, "*");
+      }
+    
+      window.close();
+    </script>
     </body>
-    </html>
     """
 
 
-@app.post("/save_token")
-async def save_token(token: Token):
-    print("Received token:", token.token)
-    return {"status": "success", "received_token": token.token}
-
-
-@app.get("/api/1/{token}/me")
+@app.post("/api/1/{token}/me")
 async def itch_user(token: str):
-    return {"message": f"{token}!"}
+    url = f"https://itch.io/api/1/{token}/me"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.json()
 
 
 if __name__ == "__main__":
