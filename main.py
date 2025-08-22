@@ -62,4 +62,4 @@ async def itch_user(token: str):
 
 if __name__ == "__main__":
     print("BOT STARTED")
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=4468)
