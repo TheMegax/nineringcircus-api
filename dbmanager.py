@@ -36,6 +36,7 @@ class DBPlayer(SQLModel, table=True):
     pity: Optional[int] = Field(default=0)
     pull_tokens: Optional[int] = Field(default=0)
     total_pulls: Optional[int] = Field(default=0)
+    seen_events: Optional[str] = Field(default="")  # Comma-separated event IDs
     candy_a: Optional[int] = Field(default=0)
     candy_b: Optional[int] = Field(default=0)
     candy_c: Optional[int] = Field(default=0)
