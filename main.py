@@ -1,7 +1,8 @@
 import httpx
 import uvicorn
+
+import dbmanager
 from fastapi import FastAPI
-from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 
@@ -14,10 +15,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-class Token(BaseModel):
-    token: str
 
 
 @app.get("/")
@@ -60,6 +57,26 @@ async def itch_user(token: str):
         return response.json()
 
 
+@app.post("/api/circus/{token}/player/link_mc/{mc_username}")
+async def link_mc_username(token: str, mc_username: str):
+    if len(mc_username) > 16 or not mc_username.isalnum():
+        return {"error": "Invalid Minecraft username. It must be alphanumeric and up to 16 characters long."}
+    response = await itch_user(token)
+    if response.is_error:
+        return {"error": "Invalid token"}
+    user_data = response.json()
+    if "id" not in user_data:
+        return {"error": "User ID not found in response"}
+    itch_id = user_data["id"]
+    db_player = dbmanager.get_db_player_from_itch_id(itch_id)
+    if not db_player:
+        db_player = dbmanager.create_db_player(itch_id)
+    db_player.mc_username = mc_username
+    dbmanager.update_db_player(db_player)
+    return {"message": "Minecraft username linked successfully", "player_id": db_player.player_id}
+
+
 if __name__ == "__main__":
     print("BOT STARTED")
+    dbmanager.initialize_database()
     uvicorn.run(app, host="0.0.0.0", port=4468)
