@@ -11,22 +11,49 @@ def formatlog(msg: str):
 
 # <<< MODELS >>> #
 class Badge(SQLModel, table=True):
-    badge_id: int = Field(primary_key=True)
-    badge_name: Optional[str] = Field(default="")
+    badge_id: str = Field(primary_key=True)
+    badge_name: str = Field(default="")
     uses: Optional[int] = Field(default=-1)
     cooldown_date: Optional[str] = Field(default="")
     player_id: Optional[int] = Field(default=None, foreign_key="dbplayer.player_id")
-    player: Optional["DBPlayer"] = Relationship(back_populates="badges")
+    player: Optional["DBPlayer"] = Relationship(
+        back_populates="badges",
+        sa_relationship_kwargs={"foreign_keys": "[Badge.player_id]"}
+    )
 
 
-class Item(SQLModel, table=True):
-    item_id: int = Field(primary_key=True)
-    item_name: Optional[str] = Field(default="")
-    item_type: Optional[str] = Field(default="")  # "unit", "weapon", "accessory", "mc_item"
-    item_rarity: Optional[str] = Field(default="")  # "common", "uncommon", "rare", "legendary"
-    item_uses: Optional[int] = Field(default=-1)
+class RPGItem(SQLModel, table=True):
+    item_id: str = Field(primary_key=True)
+    item_name: str = Field(default="")
+    item_type: Optional[str] = Field(default="")  # "weapon", "accessory", "material"
     player_id: Optional[int] = Field(default=None, foreign_key="dbplayer.player_id")
-    player: Optional["DBPlayer"] = Relationship(back_populates="items")
+    player: Optional["DBPlayer"] = Relationship(
+        back_populates="rpg_items",
+        sa_relationship_kwargs={"foreign_keys": "[RPGItem.player_id]"}
+    )
+
+
+class ValleyItem(SQLModel, table=True):
+    item_id: str = Field(primary_key=True)
+    item_name: str = Field(default="")
+    item_uses: Optional[int] = Field(default=-1)
+    cooldown_date: Optional[str] = Field(default="")
+    player_id: Optional[int] = Field(default=None, foreign_key="dbplayer.player_id")
+    player: Optional["DBPlayer"] = Relationship(
+        back_populates="valley_items",
+        sa_relationship_kwargs={"foreign_keys": "[ValleyItem.player_id]"}
+    )
+
+
+class Unit(SQLModel, table=True):
+    unit_id: str = Field(primary_key=True)
+    unit_name: str = Field(default="")
+    unit_rarity: Optional[str] = Field(default="")  # "common", "uncommon", "rare", "legendary"
+    player_id: Optional[int] = Field(default=None, foreign_key="dbplayer.player_id")
+    player: Optional["DBPlayer"] = Relationship(
+        back_populates="units",
+        sa_relationship_kwargs={"foreign_keys": "[Unit.player_id]"}
+    )
 
 
 class DBPlayer(SQLModel, table=True):
@@ -42,9 +69,23 @@ class DBPlayer(SQLModel, table=True):
     candy_c: Optional[int] = Field(default=0)
     candy_d: Optional[int] = Field(default=0)
     coins: Optional[int] = Field(default=0)
-    items: list["Item"] = Relationship(back_populates="player")
-    badges: list["Badge"] = Relationship(back_populates="player")
-    equipped_badge: Optional[int] = Field(default=None, foreign_key="badge.badge_id")
+    rpg_items: list["RPGItem"] = Relationship(
+        back_populates="player",
+        sa_relationship_kwargs={"foreign_keys": "[RPGItem.player_id]"}
+    )
+    valley_items: list["ValleyItem"] = Relationship(
+        back_populates="player",
+        sa_relationship_kwargs={"foreign_keys": "[ValleyItem.player_id]"}
+    )
+    units: list["Unit"] = Relationship(
+        back_populates="player",
+        sa_relationship_kwargs={"foreign_keys": "[Unit.player_id]"}
+    )
+    badges: list["Badge"] = Relationship(
+        back_populates="player",
+        sa_relationship_kwargs={"foreign_keys": "[Badge.player_id]"}
+    )
+    equipped_badge: Optional[str] = Field(default=None, foreign_key="badge.badge_name")
 
 
 # <<< DATABASE CONNECTION >>> #
@@ -80,11 +121,99 @@ def get_db_player_from_mc_username(mc_username: str) -> DBPlayer | None:
     return results.first()
 
 
+# <<< BADGES >>> #
+def create_badge(badge_name: str) -> Badge:
+    badge = Badge(badge_name=badge_name)
+    session.add(badge)
+    session.commit()
+    formatlog(f'New badge created with ID {badge.badge_id} and name "{badge_name}".')
+    return badge
+
+
+def get_badge_from_id(badge_int: int) -> Badge | None:
+    badge = session.get(Badge, badge_int)
+    if not badge:
+        formatlog(f'Badge with ID "{badge_int}" not found in the database.')
+    return badge
+
+
+def get_badges_from_player(player_id: int) -> list[Badge]:
+    statement = select(Badge).where(Badge.player_id == player_id)
+    results = session.exec(statement)
+    return list(results.all())
+
+
+# <<< RPG Items >>>
+def create_rpg_item(item_name: str) -> RPGItem:
+    item = RPGItem(badge_name=item_name)
+    session.add(item)
+    session.commit()
+    formatlog(f'New RPG Item created with ID {item.item_id} and name "{item_name}".')
+    return item
+
+
+def get_rpg_item_from_id(item_id: int) -> RPGItem | None:
+    item = session.get(RPGItem, item_id)
+    if not item:
+        formatlog(f'RPG Item with ID "{item_id}" not found in the database.')
+    return item
+
+
+def get_rpg_items_from_player(player_id: int) -> list[RPGItem]:
+    statement = select(RPGItem).where(RPGItem.player_id == player_id)
+    results = session.exec(statement)
+    return list(results.all())
+
+
+# <<< Valley Items >>>
+def create_valley_item(item_name: str) -> ValleyItem:
+    item = ValleyItem(badge_name=item_name)
+    session.add(item)
+    session.commit()
+    formatlog(f'New Valley Item created with name ID "{item_name}".')
+    return item
+
+
+def get_valley_item_from_id(item_id: int) -> ValleyItem | None:
+    item = session.get(ValleyItem, item_id)
+    if not item:
+        formatlog(f'Valley Item with ID "{item_id}" not found in the database.')
+    return item
+
+
+def get_valley_items_from_player(player_id: int) -> list[ValleyItem]:
+    statement = select(ValleyItem).where(ValleyItem.player_id == player_id)
+    results = session.exec(statement)
+    return list(results.all())
+
+
+# <<< Units >>>
+def create_unit(unit_name: str) -> Unit:
+    unit = Unit(unit_name=unit_name)
+    session.add(unit)
+    session.commit()
+    formatlog(f'New Unit created with ID {unit.unit_id} and name "{unit_name}".')
+    return unit
+
+
+def get_unit_from_id(unit_id: int) -> Unit | None:
+    unit = session.get(Unit, unit_id)
+    if not unit:
+        formatlog(f'Unit with ID "{unit_id}" not found in the database.')
+    return unit
+
+
+def get_units_from_player(player_id: int) -> list[Unit]:
+    statement = select(Unit).where(Unit.player_id == player_id)
+    results = session.exec(statement)
+    return list(results.all())
+
+
 # <<< DATABASE >>> #
 def initialize_database() -> None:
     SQLModel.metadata.create_all(engine)
 
 
-def update_db_player(db_player):
-    session.add(db_player)
+def update_model(model) -> None:
+    session.add(model)
     session.commit()

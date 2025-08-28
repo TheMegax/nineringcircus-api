@@ -1,5 +1,8 @@
+import random
+
 import httpx
 import uvicorn
+from pydantic import BaseModel
 
 import dbmanager
 from fastapi import FastAPI
@@ -81,10 +84,11 @@ async def trigger_event(token: str, event_id: str):
     seen_events = db_player.seen_events.split(",") if db_player.seen_events else []
     if event_id in seen_events:
         return {"message": "Event already triggered", "player_id": db_player.player_id}
-    await trigger_event_internal(event_id, db_player)
+    if await trigger_event_internal(event_id, db_player) > 0:
+        return {"message": "Event not found", "player_id": db_player.player_id}
     seen_events.append(event_id)
     db_player.seen_events = ",".join(seen_events)
-    dbmanager.update_db_player(db_player)
+    dbmanager.update_model(db_player)
     return {"message": "Event triggered successfully", "player_id": db_player.player_id}
 
 
@@ -96,8 +100,105 @@ async def link_mc_username(token: str, mc_username: str):
     if db_player is None:
         return {"error": "Invalid token"}
     db_player.mc_username = mc_username
-    dbmanager.update_db_player(db_player)
+    dbmanager.update_model(db_player)
     return {"message": "Minecraft username linked successfully", "player_id": db_player.player_id}
+
+
+class GachaPullRequest(BaseModel):
+    pulls: int
+    chosen_unit: str = ""
+
+
+@app.post("/api/circus/{token}/gacha/pull")
+async def gacha_pull(token: str, request: GachaPullRequest):
+    pulls = request.pulls
+    chosen_unit = request.chosen_unit
+    db_player = await validate_and_get_player(token)
+    if db_player is None:
+        return {"error": "Invalid token"}
+
+    prizes = ["material", "candy", "coin", "unit"]
+    material_weight = 60
+    candy_weight = 15
+    coin_weight = 15
+    unit_weight = 10
+
+    unit_rarities = ["common", "uncommon", "rare", "legendary"]
+    common_unit_weight = 35
+    uncommon_unit_weight = 30
+    rare_unit_weight = 20
+    legendary_unit_weight = 15
+    pull_result = {}
+
+    if db_player.pull_tokens < pulls:
+        return {"error": "Not enough pull tokens"}
+    for i in range(pulls):
+        weights = (material_weight, candy_weight, coin_weight, unit_weight)
+        prize = random.choices(prizes, weights=weights)[0]
+        match prize:
+            case "material":
+                material_name = f"material_{random.randint(1, 25)}"
+                if not pull_result.__contains__(material_name):
+                    pull_result[material_name] = 0
+                pull_result[material_name] += 1
+            case "candy":
+                candy_type = random.choice(["A", "B", "C", "D"])
+                candy_name = f"candy_{candy_type}"
+                candy_amount = random.randint(3, 5)
+                if not pull_result.__contains__(candy_name):
+                    pull_result[candy_name] = 0
+                pull_result[candy_name] += candy_amount
+            case "coin":
+                coin_amount = random.randint(1, 1)
+                if not pull_result.__contains__("coins"):
+                    pull_result["coins"] = 0
+                pull_result["coins"] += coin_amount
+            case "unit":
+                weights = (common_unit_weight, uncommon_unit_weight, rare_unit_weight, legendary_unit_weight)
+                unit_rarity = random.choices(unit_rarities, weights=weights)[0]
+
+                # TEST
+                common_num = 10
+                uncommon_num = 6
+                rare_num = 5
+                legendary_num = 4
+
+                max_range: int
+                match unit_rarity:
+                    case "common":
+                        max_range = common_num
+                    case "uncommon":
+                        max_range = uncommon_num
+                    case "rare":
+                        max_range = rare_num
+                    case "legendary":
+                        max_range = legendary_num
+                    case _:
+                        max_range = 1
+
+                unit_name = f"{unit_rarity}_{random.randint(1, max_range)}"
+                if not pull_result.__contains__(unit_name):
+                    pull_result[unit_name] = 0
+                pull_result[unit_name] += 1
+                # unit = dbmanager.create_unit(unit_name)
+                # unit.model_dump_json()
+    return {"message": "Gacha pull completed", "player_id": db_player.player_id, "results": pull_result}
+
+
+class GachaTokensRequest(BaseModel):
+    amount: int
+
+
+@app.post("/api/circus/{token}/gacha/tokens")
+async def add_tokens(token: str, request: GachaTokensRequest):
+    amount = request.amount
+    db_player = await validate_and_get_player(token)
+    if db_player is None:
+        return {"error": "Invalid token"}
+    if not await is_admin(db_player):
+        return {"error": "Unauthorized"}
+    await add_tokens_internal(db_player, amount)
+    return {"message": f"Added {amount} tokens", "player_id": db_player.player_id}
 
 
 async def validate_and_get_player(token: str) -> dbmanager.DBPlayer | None:
@@ -112,10 +213,9 @@ async def validate_and_get_player(token: str) -> dbmanager.DBPlayer | None:
 
 async def get_itch_id_from_token(token: str) -> int | None:
     response = await itch_user(token)
-    if response.is_error:
+    if response.get("error"):
         return None
-    user_data = response.json()
-    return user_data.get("id")
+    return response.get("user").get("id")
 
 
 async def is_admin(player: dbmanager.DBPlayer) -> bool:
@@ -125,12 +225,21 @@ async def is_admin(player: dbmanager.DBPlayer) -> bool:
     return itch_id in [7258425]
 
 
-async def trigger_event_internal(event_id: str, player: dbmanager.DBPlayer):
+async def trigger_event_internal(event_id: str, player: dbmanager.DBPlayer) -> int:
     match event_id:
         case "test_event":
             print(f"Test event triggered for player {player.player_id}")
         case _:
             print(f"Unknown event ID: {event_id}")
+            return 1
+    return 0
+
+
+async def add_tokens_internal(player: dbmanager.DBPlayer, amount: int) -> None:
+    if amount <= 0:
+        return
+    player.pull_tokens = (player.pull_tokens or 0) + amount
+    dbmanager.update_model(player)
 
 
 if __name__ == "__main__":
