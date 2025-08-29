@@ -21,6 +21,14 @@ app.add_middleware(
 )
 
 
+# Linear interpolation function
+def lerp(a, b, weight):
+    """
+    Returns the linear interpolation between a and b with the given weight (0 to 1).
+    """
+    return a + (b - a) * weight
+
+
 @app.get("/")
 async def root():
     return {"message": "Hello there!"}
@@ -112,77 +120,108 @@ class GachaPullRequest(BaseModel):
 @app.post("/api/circus/{token}/gacha/pull")
 async def gacha_pull(token: str, request: GachaPullRequest):
     pulls = request.pulls
-    chosen_unit = request.chosen_unit
-    db_player = await validate_and_get_player(token)
-    if db_player is None:
-        return {"error": "Invalid token"}
+    #    chosen_unit = request.chosen_unit
+    #    db_player = await validate_and_get_player(token)
+    #    if db_player is None:
+    #        return {"error": "Invalid token"}
 
-    prizes = ["material", "candy", "coin", "unit"]
-    material_weight = 60
-    candy_weight = 15
-    coin_weight = 15
-    unit_weight = 10
+    #    if db_player.pull_tokens < pulls:
+    #        return {"error": "Not enough pull tokens"}
 
-    unit_rarities = ["common", "uncommon", "rare", "legendary"]
-    common_unit_weight = 35
-    uncommon_unit_weight = 30
-    rare_unit_weight = 20
-    legendary_unit_weight = 15
+    up_rate = 0.5
+    pity = 0
+    soft_pity = 40
+    hard_pity = 60
     pull_result = {}
 
-    if db_player.pull_tokens < pulls:
-        return {"error": "Not enough pull tokens"}
     for i in range(pulls):
-        weights = (material_weight, candy_weight, coin_weight, unit_weight)
-        prize = random.choices(prizes, weights=weights)[0]
-        match prize:
-            case "material":
-                material_name = f"material_{random.randint(1, 25)}"
-                if not pull_result.__contains__(material_name):
-                    pull_result[material_name] = 0
-                pull_result[material_name] += 1
-            case "candy":
-                candy_type = random.choice(["A", "B", "C", "D"])
-                candy_name = f"candy_{candy_type}"
-                candy_amount = random.randint(3, 5)
-                if not pull_result.__contains__(candy_name):
-                    pull_result[candy_name] = 0
-                pull_result[candy_name] += candy_amount
-            case "coin":
-                coin_amount = random.randint(1, 1)
-                if not pull_result.__contains__("coins"):
-                    pull_result["coins"] = 0
-                pull_result["coins"] += coin_amount
-            case "unit":
-                weights = (common_unit_weight, uncommon_unit_weight, rare_unit_weight, legendary_unit_weight)
-                unit_rarity = random.choices(unit_rarities, weights=weights)[0]
+        prizes = {"material": 60, "candy": 15, "ticket": 15, "coin": 7, "unit": 3}
+        unit_rarities = {"common": 35, "uncommon": 30, "rare": 20, "legendary": 15}
 
-                # TEST
-                common_num = 10
-                uncommon_num = 6
-                rare_num = 5
-                legendary_num = 4
+        got_unit = False
+        if pity >= soft_pity:
+            pity_lp = lerp(1, 0, (pity - soft_pity) / (hard_pity - soft_pity))
+            for k, v in prizes.items():
+                if k == "unit":
+                    continue
+                prizes[k] = v * pity_lp
 
-                max_range: int
-                match unit_rarity:
-                    case "common":
-                        max_range = common_num
-                    case "uncommon":
-                        max_range = uncommon_num
-                    case "rare":
-                        max_range = rare_num
-                    case "legendary":
-                        max_range = legendary_num
-                    case _:
-                        max_range = 1
+        for j in range(random.randint(2, 3)):
+            if up_rate > 0.5:
+                rares_lp = lerp(1, 0, (up_rate - 0.5) / 0.5)
+                for k, v in unit_rarities.items():
+                    if k in ["rare", "legendary"]:
+                        continue
+                    unit_rarities[k] = v * rares_lp
+            else:
+                commons_lp = lerp(1, 0, (0.5 - up_rate) / 0.5)
+                for k, v in unit_rarities.items():
+                    if k in ["common", "uncommon"]:
+                        continue
+                    unit_rarities[k] = v * commons_lp
 
-                unit_name = f"{unit_rarity}_{random.randint(1, max_range)}"
-                if not pull_result.__contains__(unit_name):
-                    pull_result[unit_name] = 0
-                pull_result[unit_name] += 1
-                # unit = dbmanager.create_unit(unit_name)
-                # unit.model_dump_json()
-    return {"message": "Gacha pull completed", "player_id": db_player.player_id, "results": pull_result}
+            prize = random.choices(list(prizes.keys()), weights=list(prizes.values()))[0]
+            match prize:
+                case "material":
+                    material_name = f"material_{random.randint(1, 25)}"
+
+                    pull_result.setdefault(material_name, 0)
+                    pull_result[material_name] += 1
+                case "candy":
+                    candy_type = random.choice(["A", "B", "C", "D", "E"])
+                    candy_name = f"candy_{candy_type}"
+                    candy_amount = random.randint(3, 5)
+
+                    pull_result.setdefault(candy_name, 0)
+                    pull_result[candy_name] += candy_amount
+                case "coin":
+                    coin_amount = random.randint(1, 1)
+
+                    pull_result.setdefault("coins", 0)
+                    pull_result["coins"] += coin_amount
+                case "ticket":
+                    ticket_amount = random.randint(3, 15)
+
+                    pull_result.setdefault("tickets", 0)
+                    pull_result["tickets"] += ticket_amount
+                case "unit":
+                    got_unit = True
+                    unit_rarity = random.choices(list(unit_rarities.keys()), weights=list(unit_rarities.values()))[0]
+
+                    # TEST
+                    common_num = 10
+                    uncommon_num = 6
+                    rare_num = 5
+                    legendary_num = 4
+
+                    max_range: int
+                    match unit_rarity:
+                        case "common":
+                            max_range = common_num
+                            up_rate += 0.03
+                        case "uncommon":
+                            max_range = uncommon_num
+                            up_rate += 0.02
+                        case "rare":
+                            max_range = rare_num
+                            up_rate -= 0.10
+                        case "legendary":
+                            max_range = legendary_num
+                            up_rate -= 0.15
+                        case _:
+                            max_range = 1
+                    up_rate = max(0.0, min(1.0, up_rate))
+
+                    unit_name = f"{unit_rarity}_{random.randint(1, max_range)}"
+                    pull_result.setdefault(unit_name, 0)
+                    pull_result[unit_name] += 1
+                    # unit = dbmanager.create_unit(unit_name)
+                    # unit.model_dump_json()
+        if not got_unit:
+            pity += 1
+        else:
+            pity = 0
+    return {"message": "Gacha pull completed", "results": pull_result}
 
 
 class GachaTokensRequest(BaseModel):

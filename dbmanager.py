@@ -61,6 +61,7 @@ class DBPlayer(SQLModel, table=True):
     itch_id: Optional[int] = Field(default="")
     mc_username: Optional[str] = Field(default="")
     pity: Optional[int] = Field(default=0)
+    up_rate: Optional[float] = Field(default=0.5)
     pull_tokens: Optional[int] = Field(default=0)
     total_pulls: Optional[int] = Field(default=0)
     seen_events: Optional[str] = Field(default="")  # Comma-separated event IDs
@@ -68,6 +69,7 @@ class DBPlayer(SQLModel, table=True):
     candy_b: Optional[int] = Field(default=0)
     candy_c: Optional[int] = Field(default=0)
     candy_d: Optional[int] = Field(default=0)
+    candy_e: Optional[int] = Field(default=0)
     coins: Optional[int] = Field(default=0)
     rpg_items: list["RPGItem"] = Relationship(
         back_populates="player",
