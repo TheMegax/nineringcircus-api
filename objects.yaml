@@ -1,0 +1,53 @@
+badges:
+  banana:
+    uses: -1
+  bat:
+    uses: -1
+  cat:
+    uses: -1
+  clown:
+    uses: -1
+  crow:
+    uses: -1
+  cthulhu:
+    uses: -1
+  cultist:
+    uses: -1
+  frankenstein:
+    uses: -1
+  horse:
+    uses: -1
+  jackolantern:
+    uses: -1
+  jester:
+    uses: -1
+    cooldown: 86400
+  scientist:
+    uses: -1
+  moth:
+    uses: -1
+rpgitems:
+  stick:
+    type: weapon
+valleyitems:
+  stick:
+    uses: 1
+    cooldown: 0
+units:
+  common:
+    - motorcage
+    - mime
+    - juggler
+  uncommon:
+    - rubberlimbs
+  rare:
+    - testy
+  legendary:
+    - firebreather
+    - magician
+events:
+  tutorial_complete:
+    candy: 10
+    pull_tokens: 20
+    coins: 3
+    tickets: 50

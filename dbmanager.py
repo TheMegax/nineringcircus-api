@@ -71,6 +71,7 @@ class DBPlayer(SQLModel, table=True):
     candy_d: Optional[int] = Field(default=0)
     candy_e: Optional[int] = Field(default=0)
     coins: Optional[int] = Field(default=0)
+    tickets: Optional[int] = Field(default=0)
     rpg_items: list["RPGItem"] = Relationship(
         back_populates="player",
         sa_relationship_kwargs={"foreign_keys": "[RPGItem.player_id]"}
@@ -87,7 +88,7 @@ class DBPlayer(SQLModel, table=True):
         back_populates="player",
         sa_relationship_kwargs={"foreign_keys": "[Badge.player_id]"}
     )
-    equipped_badge: Optional[str] = Field(default=None, foreign_key="badge.badge_name")
+    equipped_badge: Optional[str] = Field(default=None, foreign_key="badge.badge_id")
 
 
 # <<< DATABASE CONNECTION >>> #
